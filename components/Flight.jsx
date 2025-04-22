@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
+import toast, { Toaster } from "react-hot-toast";
+
 import {
   Popover,
   PopoverContent,
@@ -21,14 +23,106 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import debounce from "lodash.debounce";
+
 export default function FlightSearchForm() {
   const [departureDate, setDepartureDate] = useState();
   const [returnDate, setReturnDate] = useState();
 
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [fromSuggestions, setFromSuggestions] = useState([]);
+  const [toSuggestions, setToSuggestions] = useState([]);
+
+  const fetchSuggestions = async (query, type) => {
+    if (query.length < 2) {
+      if (type === "from") setFromSuggestions([]);
+      else setToSuggestions([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/destination/search?q=${query}`);
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+      const data = await res.json();
+      if (!Array.isArray(data?.data)) {
+        // toast.error("Unexpected response format");
+        // console.error("Unexpected response format:", data);
+        return;
+      }
+
+      const suggestions = data.data
+        .map((item) => {
+          if (!item.cityName || !item.countryName || !item.code) {
+            // console.warn("Skipping invalid item:", item);
+            // toast.error("Invalid suggestion data");
+            return null;
+          }
+          return {
+            id: item.id,
+            name: `${item.cityName}, ${item.countryName}`,
+            iata: item.code,
+          };
+        })
+        .filter(Boolean);
+
+      if (type === "from") setFromSuggestions(suggestions);
+      else setToSuggestions(suggestions);
+    } catch (error) {
+      toast.error("Error fetching suggestions");
+      // console.error("Error fetching suggestions:", error);
+    }
+  };
+
+  // Debounce the fetchSuggestions function
+  const debouncedFetchFromSuggestions = debounce(
+    (query) => fetchSuggestions(query, "from"),
+    1000
+  );
+  const debouncedFetchToSuggestions = debounce(
+    (query) => fetchSuggestions(query, "to"),
+    1000
+  );
+
+  const handleFromChange = (e) => {
+    const value = e.target.value;
+    setFrom(value);
+    fetchSuggestions(value, "from");
+    debouncedFetchFromSuggestions(value);
+  };
+
+  const handleToChange = (e) => {
+    const value = e.target.value;
+    setTo(value);
+    fetchSuggestions(value, "to");
+    debouncedFetchToSuggestions(value);
+  };
+
+  const handleFromSelect = (suggestion) => {
+    setFrom(suggestion);
+    setFromSuggestions([]);
+  };
+
+  const handleToSelect = (suggestion) => {
+    setTo(suggestion);
+    setToSuggestions([]);
+  };
+
+  const handleSearch = () => {
+    if (!from) {
+      toast.error("Please select From.");
+      return;
+    } else if (!to) {
+      toast.error("Please select To.");
+      return;
+    }
+    console.log({ from, to });
+  };
+
   return (
-    // <div className="min-h-screen bg-background flex items-center justify-center p-6">
-    // className="bg-card text-card-foreground rounded-2xl shadow-xl p-8 w-full max-w-5xl space-y-6"
     <div>
+      <Toaster position="top-right" />
       {/* From and To Fields */}
       <div className="flex flex-col sm:flex-row gap-6 mb-8">
         <div className="flex flex-col flex-1">
@@ -36,20 +130,50 @@ export default function FlightSearchForm() {
             From
           </Label>
           <Input
+            onChange={handleFromChange}
             id="from"
+            value={from}
             placeholder="Departure"
             className="h-12 text-base transition-transform duration-200 hover:scale-[1.02] bg-background border-border"
           />
+          {fromSuggestions.length > 0 && (
+            <ul className="w-fit mt-20 absolute z-10 bg-white border rounded shadow-md max-h-48 overflow-y-hidden">
+              {fromSuggestions.map((sug) => (
+                <li
+                  key={sug.id}
+                  className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  onClick={() => handleFromSelect(`${sug.name} (${sug.iata})`)}
+                >
+                  {sug.name} ({sug.iata})
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="flex flex-col flex-1">
           <Label htmlFor="to" className="text-base">
             To
           </Label>
           <Input
+            onChange={handleToChange}
+            value={to}
             id="to"
             placeholder="Destination"
             className="h-12 text-base transition-transform duration-200 hover:scale-[1.02] bg-background border-border"
           />
+          {toSuggestions.length > 0 && (
+            <ul className="w-fit mt-20 absolute z-10 bg-white border rounded shadow-md max-h-48 overflow-y-hidden">
+              {toSuggestions.map((sug) => (
+                <li
+                  key={sug.id}
+                  className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  onClick={() => handleToSelect(`${sug.name} (${sug.iata})`)}
+                >
+                  {sug.name} ({sug.iata})
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -155,11 +279,13 @@ export default function FlightSearchForm() {
       </div>
 
       <div className="flex justify-end pt-4">
-        <Button className="bg-[#31a539] text-primary-foreground h-12 !px-14 text-base transition-transform duration-200 hover:scale-[1.05]">
+        <Button
+          className="bg-[#31a539] text-primary-foreground h-12 !px-14 text-base transition-transform duration-200 hover:scale-[1.05]"
+          onClick={handleSearch}
+        >
           <SearchCheck /> Search
         </Button>
       </div>
     </div>
-    // {/* </div> */}
   );
 }

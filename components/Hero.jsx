@@ -97,7 +97,7 @@ export default function HeroSection() {
           />
 
           {/* Review Box */}
-          <div className="absolute top-8 left-0 bg-white rounded-xl shadow-lg px-5 py-3 flex items-center space-x-3">
+          <div className="absolute top-8 left-0 bg-white rounded-xl shadow-lg px-5 py-3 flex items-center space-x-3 -z-10">
             <div className="flex -space-x-2">
               <img
                 src="/author.jpg"
